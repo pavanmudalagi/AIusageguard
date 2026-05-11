@@ -1,0 +1,3 @@
+ALTER TABLE "EndpointUser" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE "PolicyAssignment" ALTER COLUMN "updatedAt" DROP DEFAULT;
+ALTER TABLE "PolicyDelivery" ALTER COLUMN "updatedAt" DROP DEFAULT;

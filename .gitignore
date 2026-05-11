@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+TASK_NOTES.md
+.DS_Store
+coverage/
+*.log
+*.tsbuildinfo
+apps/api/prisma/migrations/dev.db*

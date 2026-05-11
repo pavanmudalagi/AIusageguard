@@ -1,0 +1,31 @@
+{
+  "name": "ai-usage-guard-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Management server and admin dashboard for AI Usage Guard.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @ai-usage-guard/api",
+    "dev:web": "npm run dev -w @ai-usage-guard/web",
+    "build": "npm run build -ws",
+    "test": "npm run test -ws --if-present",
+    "db:migrate": "npm run db:migrate -w @ai-usage-guard/api",
+    "db:seed": "npm run db:seed -w @ai-usage-guard/api",
+    "db:reset": "npm run db:reset -w @ai-usage-guard/api",
+    "prisma:generate": "npm run prisma:generate -w @ai-usage-guard/api",
+    "demo:browser-agent": "tsx scripts/demo-browser-plugin-agent.ts",
+    "build:extension": "node --import tsx scripts/build-browser-shield-plugin.ts",
+    "validate:extension": "npm run build:extension && node scripts/validate-extension.js",
+    "test:extension-redaction": "node scripts/test-extension-redaction.js",
+    "test:extension-file-scanning": "node scripts/test-extension-file-scanning.js"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

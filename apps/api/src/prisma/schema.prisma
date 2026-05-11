@@ -1,0 +1,675 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrganizationType {
+  msp
+  customer
+}
+
+enum UserRole {
+  super_admin
+  msp_admin
+  customer_admin
+  analyst
+  read_only
+}
+
+enum AppType {
+  browser
+  desktop
+  browser_and_desktop
+}
+
+enum RiskLevel {
+  low
+  medium
+  high
+  critical
+}
+
+enum ApprovedStatus {
+  approved
+  restricted
+  blocked
+  unknown
+}
+
+enum InputType {
+  prompt
+  file_upload
+  app_usage
+  policy
+  desktop_app
+  browser
+}
+
+enum ActionTaken {
+  detected
+  scanned
+  allowed
+  warned
+  blocked
+  redacted
+  replaced
+  user_override
+  failed
+  unsupported
+}
+
+enum PolicyStatus {
+  draft
+  published
+  archived
+}
+
+enum EndpointPolicyStatus {
+  unknown
+  pending
+  delivered
+  applied
+  failed
+  out_of_date
+}
+
+enum AssignmentType {
+  organization
+  device_group
+  user_group
+  endpoint
+  genai_app
+}
+
+enum DeliveryStatus {
+  pending
+  delivered
+  applied
+  failed
+  outdated
+}
+
+enum EducationStatus {
+  recommended
+  assigned
+  acknowledged
+  repeated_after_training
+}
+
+enum TargetBrowser {
+  chrome
+  edge
+}
+
+enum PluginInstallStatus {
+  installed
+  active
+  inactive
+  outdated
+  failed
+}
+
+enum BrowserPluginVersionStatus {
+  draft
+  published
+  latest
+  deprecated
+}
+
+enum PluginUpdateSeverity {
+  optional
+  recommended
+  required
+}
+
+enum PluginRolloutRing {
+  pilot
+  staged
+  full
+}
+
+enum PluginUpdateStatus {
+  up_to_date
+  update_available
+  update_required
+  pending_admin_deployment
+  failed
+  unknown
+}
+
+enum PluginRolloutTargetType {
+  organization
+  endpoint_group
+  endpoint
+}
+
+enum PluginRolloutStatus {
+  draft
+  active
+  paused
+  completed
+}
+
+enum PluginUpdateNoticeStatus {
+  pending
+  seen
+  acknowledged
+  completed
+}
+
+enum AlertSeverity {
+  low
+  medium
+  high
+  critical
+}
+
+enum AlertStatus {
+  open
+  investigating
+  resolved
+  dismissed
+}
+
+enum TemplateType {
+  email
+  education_blog
+  user_coaching
+  notification
+}
+
+enum TemplateStatus {
+  draft
+  published
+  archived
+}
+
+model Organization {
+  id                  String         @id @default(cuid())
+  name                String
+  type                OrganizationType
+  parentOrgId         String?
+  parentOrg           Organization?  @relation("OrgHierarchy", fields: [parentOrgId], references: [id])
+  children            Organization[] @relation("OrgHierarchy")
+  enrollmentTokenHash String?
+  settings            OrganizationSettings?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  users               User[]
+  endpoints           Endpoint[]
+  events              UsageEvent[]
+  genAIApplications   GenAIApplication[]
+  policies            Policy[]
+  assignments         PolicyAssignment[]
+  alerts              Alert[]
+  templates           EmailTemplate[]
+  auditLogs           AuditLog[]
+  educationItems      EducationRecommendation[]
+  enrollmentTokens    EnrollmentToken[]
+  pluginInstalls      BrowserPluginInstall[]
+  pluginRollouts      PluginRollout[]
+  pluginUpdateNotices PluginUpdateNotice[]
+
+  @@index([parentOrgId])
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  email          String       @unique
+  name           String
+  role           UserRole
+  passwordHash   String
+  themePreference String      @default("system")
+  notificationPreferences Json?
+  dashboardPreferences Json?
+  lastLoginAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  policies       Policy[]
+  auditLogs      AuditLog[]
+  enrollmentTokens EnrollmentToken[]
+  createdPluginVersions BrowserPluginVersion[]
+  createdPluginRollouts PluginRollout[]
+  alertComments  AlertComment[]
+  assignedAlerts Alert[]      @relation("AssignedAlerts")
+  resolvedAlerts Alert[]      @relation("ResolvedAlerts")
+}
+
+model Endpoint {
+  id                      String               @id @default(cuid())
+  organizationId          String
+  organization            Organization         @relation(fields: [organizationId], references: [id])
+  deviceId                String
+  machineName             String?
+  hostname                String
+  os                      String
+  osVersion               String?
+  browser                 String?
+  browserVersion          String?
+  lastSeenAt              DateTime?
+  browserExtensionVersion String?
+  localAgentVersion       String?
+  currentPolicyId         String?
+  currentPolicyVersion    String?
+  policyStatus            EndpointPolicyStatus @default(unknown)
+  latestPluginVersion     String?
+  pluginUpdateStatus      String?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+  users                   EndpointUser[]
+  events                  UsageEvent[]
+  deliveries              PolicyDelivery[]
+  browserPluginInstalls   BrowserPluginInstall[]
+  pluginUpdateNotices     PluginUpdateNotice[]
+
+  @@unique([organizationId, deviceId])
+  @@index([organizationId])
+  @@index([lastSeenAt])
+}
+
+model EndpointUser {
+  id                 String       @id @default(cuid())
+  endpointId         String
+  endpoint           Endpoint     @relation(fields: [endpointId], references: [id])
+  userIdentifierHash String
+  displayName        String?
+  lastSeenAt         DateTime
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  events             UsageEvent[]
+
+  @@unique([endpointId, userIdentifierHash])
+}
+
+model GenAIApplication {
+  id             String         @id @default(cuid())
+  organizationId String?
+  organization   Organization?  @relation(fields: [organizationId], references: [id])
+  name           String
+  appType        AppType
+  domain         String?
+  executableName String?
+  riskRating     RiskLevel
+  approvedStatus ApprovedStatus @default(unknown)
+  firstSeenAt    DateTime?
+  lastSeenAt     DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  events         UsageEvent[]
+
+  @@unique([name, domain, executableName])
+  @@index([organizationId])
+  @@index([name])
+  @@index([domain])
+}
+
+model UsageEvent {
+  id                   String            @id @default(cuid())
+  organizationId       String
+  organization         Organization      @relation(fields: [organizationId], references: [id])
+  endpointId           String
+  endpoint             Endpoint          @relation(fields: [endpointId], references: [id])
+  endpointUserId       String?
+  endpointUser         EndpointUser?     @relation(fields: [endpointUserId], references: [id])
+  genAIApplicationId   String?
+  genAIApplication     GenAIApplication? @relation(fields: [genAIApplicationId], references: [id])
+  genAIApplicationName String
+  genAIDomain          String?
+  eventType            String
+  inputType            InputType
+  riskLevel            RiskLevel
+  detectedCategories   String[]
+  detectedCategoryCounts Json?
+  actionTaken          ActionTaken
+  policyId             String?
+  policyName           String?
+  policyVersion        String?
+  policyMode           String?
+  fileType             String?
+  fileSizeBucket       String?
+  scanStatus           String?
+  scanFailureReason    String?
+  userOverride         Boolean           @default(false)
+  userJustificationProvided Boolean      @default(false)
+  metadata             Json
+  createdAt            DateTime          @default(now())
+  alerts               Alert[]
+
+  @@index([organizationId, createdAt])
+  @@index([endpointId, createdAt])
+  @@index([eventType])
+  @@index([riskLevel])
+  @@index([createdAt])
+}
+
+model Policy {
+  id              String             @id @default(cuid())
+  organizationId  String
+  organization    Organization       @relation(fields: [organizationId], references: [id])
+  name            String
+  description     String?
+  version         String
+  status          PolicyStatus       @default(draft)
+  mode            String             @default("active")
+  policyJson      Json
+  parentPolicyId  String?
+  createdByUserId String
+  createdByUser   User               @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  publishedAt     DateTime?
+  assignments     PolicyAssignment[]
+  deliveries      PolicyDelivery[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([name])
+}
+
+model PolicyAssignment {
+  id                 String         @id @default(cuid())
+  policyId           String
+  policy             Policy         @relation(fields: [policyId], references: [id])
+  organizationId     String
+  organization       Organization   @relation(fields: [organizationId], references: [id])
+  assignmentType     AssignmentType
+  assignmentTargetId String?
+  targetId           String?
+  priority           Int            @default(100)
+  active             Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@index([organizationId])
+  @@index([policyId])
+  @@index([assignmentType, assignmentTargetId])
+}
+
+model PolicyDelivery {
+  id             String         @id @default(cuid())
+  policyId       String
+  policy         Policy         @relation(fields: [policyId], references: [id])
+  endpointId     String
+  endpoint       Endpoint       @relation(fields: [endpointId], references: [id])
+  policyVersion  String
+  deliveryStatus DeliveryStatus @default(pending)
+  deliveredAt    DateTime?
+  appliedAt      DateTime?
+  errorMessage   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([endpointId])
+  @@index([policyId])
+  @@index([deliveryStatus])
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  actorUserId    String?
+  actorUser      User?        @relation(fields: [actorUserId], references: [id])
+  action         String
+  entityType     String
+  entityId       String
+  details        Json
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([action])
+  @@index([entityType])
+  @@index([createdAt])
+}
+
+model EducationRecommendation {
+  id                  String          @id @default(cuid())
+  organizationId      String
+  organization        Organization    @relation(fields: [organizationId], references: [id])
+  userIdentifierHash  String
+  endpointId          String?
+  templateId          String?
+  template            EmailTemplate?  @relation(fields: [templateId], references: [id])
+  triggerReason       String          @default("repeated_risky_usage")
+  categories          String[]
+  riskyEventCount     Int
+  recommendedTopic    String
+  status              EducationStatus @default(recommended)
+  assignedAt          DateTime?
+  acknowledgedAt      DateTime?
+  repeatedAfterTraining Boolean       @default(false)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+model BrowserPluginVersion {
+  id                      String                     @id @default(cuid())
+  version                 String
+  status                  BrowserPluginVersionStatus @default(draft)
+  targetBrowser           TargetBrowser              @default(chrome)
+  browser                 TargetBrowser              @default(chrome)
+  packagePath             String?
+  checksum                String?
+  releaseNotes            String
+  minimumSupportedVersion String?
+  severity                PluginUpdateSeverity       @default(recommended)
+  rolloutRing             PluginRolloutRing          @default(full)
+  isLatest                Boolean                    @default(false)
+  createdByUserId         String?
+  createdByUser           User?                      @relation(fields: [createdByUserId], references: [id])
+  publishedAt             DateTime?
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+  rollouts                PluginRollout[]
+  updateNotices           PluginUpdateNotice[]
+  downloads               BrowserPluginDownload[]
+
+  @@unique([version, targetBrowser])
+}
+
+model EnrollmentToken {
+  id              String        @id @default(cuid())
+  organizationId  String
+  organization    Organization  @relation(fields: [organizationId], references: [id])
+  policyId        String
+  tokenHash       String
+  targetBrowser   TargetBrowser
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  createdByUserId String
+  createdByUser   User          @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime      @default(now())
+
+  @@index([organizationId])
+  @@index([expiresAt])
+}
+
+model BrowserPluginInstall {
+  id                   String               @id @default(cuid())
+  organizationId       String
+  organization         Organization         @relation(fields: [organizationId], references: [id])
+  endpointId           String?
+  endpoint             Endpoint?            @relation(fields: [endpointId], references: [id])
+  deviceId             String
+  machineName          String
+  browser              TargetBrowser
+  browserVersion       String?
+  pluginVersion        String
+  latestAvailableVersion String?
+  installStatus        PluginInstallStatus
+  updateStatus         PluginUpdateStatus   @default(unknown)
+  lastSeenAt           DateTime?
+  currentPolicyId      String?
+  currentPolicyVersion String?
+  policyStatus         EndpointPolicyStatus @default(unknown)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  @@unique([organizationId, deviceId, browser])
+  @@index([organizationId])
+  @@index([deviceId])
+  @@index([pluginVersion])
+}
+
+model PluginRollout {
+  id              String                  @id @default(cuid())
+  organizationId  String
+  organization    Organization            @relation(fields: [organizationId], references: [id])
+  pluginVersionId String
+  pluginVersion   BrowserPluginVersion    @relation(fields: [pluginVersionId], references: [id])
+  rolloutName     String
+  rolloutRing     PluginRolloutRing
+  targetType      PluginRolloutTargetType
+  targetId        String?
+  status          PluginRolloutStatus      @default(draft)
+  createdByUserId String
+  createdByUser   User                    @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  @@index([organizationId])
+  @@index([pluginVersionId])
+}
+
+model PluginUpdateNotice {
+  id              String                    @id @default(cuid())
+  organizationId  String
+  organization    Organization              @relation(fields: [organizationId], references: [id])
+  endpointId      String
+  endpoint        Endpoint                  @relation(fields: [endpointId], references: [id])
+  pluginVersionId String
+  pluginVersion   BrowserPluginVersion      @relation(fields: [pluginVersionId], references: [id])
+  status          PluginUpdateNoticeStatus   @default(pending)
+  firstSeenAt     DateTime                  @default(now())
+  acknowledgedAt  DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime                  @default(now())
+
+  @@unique([endpointId, pluginVersionId])
+  @@index([organizationId])
+  @@index([status])
+}
+
+model OrganizationSettings {
+  id                     String       @id @default(cuid())
+  organizationId          String       @unique
+  organization            Organization @relation(fields: [organizationId], references: [id])
+  defaultPolicyId         String?
+  uiTheme                 String       @default("system")
+  dataRetentionDays       Int          @default(90)
+  eventRetentionDays      Int          @default(90)
+  alertRetentionDays      Int          @default(180)
+  auditLogRetentionDays   Int          @default(365)
+  reportCleanPromptScans  Boolean      @default(false)
+  reportSensitiveEvents   Boolean      @default(true)
+  notificationSettings    Json?
+  smtpEnabled             Boolean      @default(false)
+  smtpHostEncrypted       String?
+  smtpPort                Int?
+  smtpUserEncrypted       String?
+  smtpPasswordEncrypted   String?
+  webhookEnabled          Boolean      @default(false)
+  webhookUrlEncrypted     String?
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+}
+
+model Alert {
+  id                 String        @id @default(cuid())
+  organizationId     String
+  organization       Organization  @relation(fields: [organizationId], references: [id])
+  title              String
+  description        String?
+  severity           AlertSeverity
+  status             AlertStatus   @default(open)
+  sourceEventId      String?
+  sourceEvent        UsageEvent?   @relation(fields: [sourceEventId], references: [id])
+  endpointId         String?
+  genAIAppName       String?
+  detectedCategories String[]
+  assignedToUserId   String?
+  assignedToUser     User?         @relation("AssignedAlerts", fields: [assignedToUserId], references: [id])
+  resolvedByUserId   String?
+  resolvedByUser     User?         @relation("ResolvedAlerts", fields: [resolvedByUserId], references: [id])
+  resolvedAt         DateTime?
+  resolutionNote     String?
+  comments           AlertComment[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([severity])
+  @@index([createdAt])
+  @@index([sourceEventId])
+}
+
+model AlertComment {
+  id        String   @id @default(cuid())
+  alertId   String
+  alert     Alert    @relation(fields: [alertId], references: [id])
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  comment   String
+  createdAt DateTime @default(now())
+
+  @@index([alertId])
+}
+
+model EmailTemplate {
+  id              String          @id @default(cuid())
+  organizationId  String
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  name            String
+  type            TemplateType
+  category        String?
+  subject         String?
+  body            String
+  variables       String[]
+  status          TemplateStatus  @default(draft)
+  version         String          @default("1.0")
+  createdByUserId String?
+  publishedAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  recommendations EducationRecommendation[]
+
+  @@unique([organizationId, name, version])
+  @@index([organizationId])
+  @@index([type])
+  @@index([status])
+}
+
+model BrowserPluginDownload {
+  id                 String                @id @default(cuid())
+  organizationId     String?
+  pluginVersionId    String?
+  pluginVersion      BrowserPluginVersion? @relation(fields: [pluginVersionId], references: [id])
+  version            String
+  targetBrowser      TargetBrowser
+  packageChecksum    String?
+  downloadedByUserId String?
+  downloadedAt       DateTime              @default(now())
+  metadata           Json?
+
+  @@index([organizationId])
+  @@index([pluginVersionId])
+  @@index([downloadedAt])
+}
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
